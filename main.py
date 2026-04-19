@@ -13,13 +13,13 @@ models_loaded = False
 
 def load_models():
 
-    if not os.path.exists("lang_classifier_model.pkl"):
+    if not os.path.exists("classifier_outputs/lang_classifier_model.pkl"):
         lang_clf.run_full_pipeline()
 
-    if not os.path.exists("arabic_gnb_model.pkl"):
+    if not os.path.exists("arabic_outputs/arabic_model.pkl"):
         ar_clf.run_full_pipeline()
 
-    if not os.path.exists("english_gnb_model.pkl"):
+    if not os.path.exists("english_outputs/english_gnb_model.pkl"):
         en_clf.run_full_pipeline()
 
     lang_clf.model, lang_clf.tfidf = LanguageClassifier.load_model()
@@ -59,4 +59,4 @@ demo = gr.Interface(
 
 if __name__ == "__main__":
     load_models()
-    demo.launch()
+    demo.launch(share=True)

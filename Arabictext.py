@@ -36,7 +36,7 @@ USER = os.getenv("KAGGLE_USERNAME")
 KEY  = os.getenv("KAGGLE_API_TOKEN")
 
 ARABIC_STOPWORDS = set(stopwords.words("arabic"))
-SAMPLE_SIZE  = 20_000
+SAMPLE_SIZE  = 60_000
 MAX_FEATURES = 3_000
 
 
@@ -59,18 +59,21 @@ class ArabicTextClassifier:
             file_name = zf.namelist()[0]
             df = pd.read_csv(zf.open(file_name), sep="\t", encoding="utf-8-sig")
         df.columns = [c.strip().lower() for c in df.columns]
+        df = df.rename(columns={"sentiment": "label", "review": "text"})
         return df
 
     def sample_dataset(self, df: pd.DataFrame, n: int = SAMPLE_SIZE, seed: int = 42) -> pd.DataFrame:
+        df = df.copy()
+
+        if "label" not in df.columns:
+            raise ValueError("Label column missing before sampling!")
+
+        df = df.dropna(subset=["label"])
+
         if n >= len(df):
             return df.reset_index(drop=True)
-        frac = n / len(df)
-        sampled = (
-            df.groupby("label", group_keys=False)
-              .apply(lambda g: g.sample(frac=frac, random_state=seed))
-        )
-        return sampled.sample(frac=1, random_state=seed).reset_index(drop=True)
 
+        return df.sample(n=n, random_state=seed).reset_index(drop=True)
     def normalizeArabic(self, text: str) -> str:
         if not isinstance(text, str):
             return ""
@@ -97,17 +100,25 @@ class ArabicTextClassifier:
         return " ".join(text.split())
 
     def full_preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+
+        if "label" not in df.columns:
+            raise ValueError("Label lost before preprocessing!")
+
         df["clean_text"] = (
             df["text"]
             .apply(self.normalizeArabic)
             .apply(self.remove_stopwords)
             .apply(self.remove_extra_spaces)
         )
+
         df = df[df["clean_text"].str.strip().astype(bool)].reset_index(drop=True)
         return df
 
     def exploratory_data_analysis(self, df: pd.DataFrame, output_dir: str = ".") -> None:
         os.makedirs(output_dir, exist_ok=True)
+        if "label" not in df.columns:
+             raise ValueError(f"'label' column missing! Available columns: {df.columns}")
         labels = df["label"].unique()
 
         counts = df["label"].value_counts()
@@ -159,13 +170,29 @@ class ArabicTextClassifier:
         plt.show()
 
         for lbl in labels:
-            text_blob = " ".join(df[df["label"] == lbl]["clean_text"])
-            wc = WordCloud(background_color="white", width=800, height=400,
-                           max_words=200, collocations=False).generate(text_blob)
+            print(f"Generating wordcloud for label: {lbl}...")
+
+            subset = df[df["label"] == lbl]["clean_text"].sample(n=5000, random_state=42, replace=True)
+
+            text_blob = " ".join(subset)
+
+            reshaped_text = reshape(text_blob)
+            bidi_text = get_display(reshaped_text)
+
+            wc = WordCloud(
+                font_path="C:/Windows/Fonts/arial.ttf",
+                background_color="white",
+                width=1000,
+                height=500,
+                max_words=150,
+                collocations=False
+            ).generate(bidi_text)
+
             fig, ax = plt.subplots(figsize=(12, 6))
             ax.imshow(wc, interpolation="bilinear")
             ax.axis("off")
             ax.set_title(_ar(f"Word Cloud – {lbl}"))
+
             plt.tight_layout()
             plt.savefig(f"{output_dir}/ar_4_wordcloud_{str(lbl).replace(' ', '_')}.png", dpi=150)
             plt.show()
@@ -188,14 +215,10 @@ class ArabicTextClassifier:
         y_pred = self.model.predict(X_test)
         return self.model, X_test, y_test, y_pred
 
-    def model_evaluation(self, y_test, y_pred, class_names=None):
+    def model_evaluation(self, y_test, y_pred, class_names=None, output_dir="."):
         print(f"Accuracy : {accuracy_score(y_test, y_pred):.4f}")
-        print(f"Precision: {precision_score(y_test, y_pred, average='weighted', zero_division=0):.4f}")
-        print(f"Recall   : {recall_score(y_test, y_pred, average='weighted', zero_division=0):.4f}")
-        print(f"F1       : {f1_score(y_test, y_pred, average='weighted', zero_division=0):.4f}")
         print(classification_report(y_test, y_pred, target_names=class_names, zero_division=0))
 
-    def visualization(self, y_test, y_pred, class_names=None, output_dir="."):
         os.makedirs(output_dir, exist_ok=True)
         cm = confusion_matrix(y_test, y_pred)
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -204,19 +227,8 @@ class ArabicTextClassifier:
         )
         ax.set_title("Confusion Matrix – Arabic")
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/ar_5_confusion_matrix.png", dpi=150)
+        plt.savefig(f"{output_dir}/ar_confusion_matrix.png", dpi=150)
         plt.show()
-
-    def save_model(self, path: str = "arabic_gnb_model.pkl") -> None:
-        with open(path, "wb") as f:
-            pickle.dump({"model": self.model, "vectorizer": self.tfidf}, f)
-        print(f"Arabic model saved → {path}")
-
-    @staticmethod
-    def load_model(path: str = "arabic_gnb_model.pkl"):
-        with open(path, "rb") as f:
-            bundle = pickle.load(f)
-        return bundle["model"], bundle["vectorizer"]
 
     def predict(self, texts: list, model=None, vectorizer=None):
         mdl = model or self.model
@@ -228,11 +240,26 @@ class ArabicTextClassifier:
         X = vec.transform(cleaned).toarray()
         return mdl.predict(X)
 
-    def run_full_pipeline(self, output_dir: str = "arabic_outputs") -> None:
-        df_raw = self.get_arabic_data()
-        df_raw.columns = [c.strip().lower() for c in df_raw.columns]
 
-        df = self.sample_dataset(df_raw, n=SAMPLE_SIZE)
+    def save_model(self, output_dir=".", filename: str = "arabic_model.pkl") -> None:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        path = output_dir + "/" +filename
+        with open(path, "wb") as f:
+            pickle.dump({"model": self.model, "vectorizer": self.tfidf}, f)
+        print(f"Arabic model saved → {path}")
+
+    @staticmethod
+    def load_model(path: str = "models/arabic_model.pkl"):
+        with open(path, "rb") as f:
+            bundle = pickle.load(f)
+        return bundle["model"], bundle["vectorizer"]
+
+
+    def run_full_pipeline(self, output_dir: str = "arabic_outputs") -> None:
+        df = self.get_arabic_data()
+        df = self.sample_dataset(df, n=SAMPLE_SIZE)
         df = self.full_preprocess(df)
 
         self.exploratory_data_analysis(df, output_dir=output_dir)
@@ -242,11 +269,9 @@ class ArabicTextClassifier:
         class_names = sorted(df["label"].unique().tolist())
 
         _, _, y_test, y_pred = self.training(X, y)
-        self.model_evaluation(y_test, y_pred, class_names=class_names)
-        self.visualization(y_test, y_pred, class_names=class_names, output_dir=output_dir)
-        self.save_model()
+        self.model_evaluation(y_test, y_pred, class_names=class_names, output_dir=output_dir)
+        self.save_model( output_dir=output_dir)
 
 if __name__ == "__main__":
     clf = ArabicTextClassifier()
-    df = clf.get_arabic_data()
-    print(df.columns)
+    clf.run_full_pipeline()

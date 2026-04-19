@@ -7,12 +7,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-
+import os
 from Arabictext import ArabicTextClassifier
 from Englishtext import EnglishTextClassifier
 
 
-SAMPLE_PER_LANG = 20_000
+SAMPLE_PER_LANG = 30_000
 MAX_FEATURES     = 5_000
 MODEL_PATH       = "lang_classifier_model.pkl"
 
@@ -71,10 +71,11 @@ class LanguageClassifier:
         y_pred = self.model.predict(X_test)
         return X_test, y_test, y_pred
 
-    def evaluate(self, y_test: np.ndarray, y_pred: np.ndarray) -> None:
+    def model_evaluation(self, y_test: np.ndarray, y_pred: np.ndarray, output_dir=".") -> None:
         print(f"Accuracy : {accuracy_score(y_test, y_pred):.4f}")
         print(classification_report(y_test, y_pred))
 
+        os.makedirs(output_dir, exist_ok=True)
         labels = sorted(np.unique(y_test))
         cm = confusion_matrix(y_test, y_pred, labels=labels)
         fig, ax = plt.subplots(figsize=(5, 4))
@@ -84,16 +85,20 @@ class LanguageClassifier:
         ax.set_xlabel("Predicted")
         ax.set_ylabel("True")
         plt.tight_layout()
-        plt.savefig("lang_confusion_matrix.png")
+        plt.savefig(f"{output_dir}/lang_confusion_matrix.png")
         plt.show()
 
-    def save_model(self, path: str = MODEL_PATH) -> None:
+    def save_model(self,output_dir=".", filename: str = MODEL_PATH) -> None:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        path = output_dir + "/" + filename
         with open(path, "wb") as f:
             pickle.dump({"model": self.model, "vectorizer": self.tfidf}, f)
         print(f"Language classifier saved → {path}")
 
     @staticmethod
-    def load_model(path: str = MODEL_PATH):
+    def load_model(path: str = "classifier_outputs/lang_classifier_model.pkl"):
         with open(path, "rb") as f:
             bundle = pickle.load(f)
         return bundle["model"], bundle["vectorizer"]
@@ -101,10 +106,10 @@ class LanguageClassifier:
     def detect_lang(self, text: str) -> str:
         X = self.tfidf.transform([text]).toarray()
         return self.model.predict(X)[0]
-    def run_full_pipeline(self) -> None:
+    def run_full_pipeline(self, output_dir: str = "classifier_outputs") -> None:
         df = self.build_language_dataset()
         X  = self.text_embedding(df["text"], fit=True)
         y  = df["language"].values
         _, y_test, y_pred = self.training(X, y)
-        self.evaluate(y_test, y_pred)
-        self.save_model()
+        self.model_evaluation(y_test, y_pred,output_dir=output_dir)
+        self.save_model(output_dir=output_dir)

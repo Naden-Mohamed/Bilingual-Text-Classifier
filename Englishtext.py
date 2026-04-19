@@ -34,7 +34,7 @@ nltk.download("omw-1.4",   quiet=True)
 USER = os.getenv("KAGGLE_USERNAME")
 KEY  = os.getenv("KAGGLE_API_TOKEN")
 
-SAMPLE_SIZE  = 20_000
+SAMPLE_SIZE  = 60_000
 MAX_FEATURES = 3_000
 
 
@@ -63,15 +63,17 @@ class EnglishTextClassifier:
         return df
 
     def sample_dataset(self, df: pd.DataFrame, n: int = SAMPLE_SIZE, seed: int = 42) -> pd.DataFrame:
+        df = df.copy()
+
+        if "label" not in df.columns:
+            raise ValueError("Label column missing before sampling!")
+
+        df = df.dropna(subset=["label"])
+
         if n >= len(df):
             return df.reset_index(drop=True)
-        frac = n / len(df)
-        sampled = (
-            df.groupby("label", group_keys=False)
-              .apply(lambda g: g.sample(frac=frac, random_state=seed))
-        )
-        return sampled.sample(frac=1, random_state=seed).reset_index(drop=True)
 
+        return df.sample(n=n, random_state=seed).reset_index(drop=True)
     def preprocess_text(self, text: str) -> str:
         if not isinstance(text, str):
             return ""
@@ -85,8 +87,7 @@ class EnglishTextClassifier:
     def exploratory_data_analysis(self, df: pd.DataFrame, output_dir: str = ".") -> None:
         os.makedirs(output_dir, exist_ok=True)
         labels = df["label"].unique()
-        n_cls  = len(labels)
-
+        n_cls = len(labels)
         counts = df["label"].value_counts()
         fig, ax = plt.subplots(figsize=(6, 4))
         bars = ax.bar(counts.index.astype(str), counts.values,
@@ -163,12 +164,13 @@ class EnglishTextClassifier:
         y_pred = self.model.predict(X_test)
         return self.model, X_test, y_test, y_pred
 
-    def evaluate(self, y_test: np.ndarray, y_pred: np.ndarray) -> None:
+    def model_evaluation(self, y_test, y_pred, class_names=None, output_dir="."):
         print(f"Accuracy : {accuracy_score(y_test, y_pred):.4f}")
         print(classification_report(y_test, y_pred))
 
+        os.makedirs(output_dir, exist_ok=True)
         labels = sorted(np.unique(y_test))
-        cm = confusion_matrix(y_test, y_pred, labels=labels)
+        cm = confusion_matrix(y_test, y_pred)
         fig, ax = plt.subplots(figsize=(max(5, len(labels) * 1.5),
                                         max(4, len(labels) * 1.3)))
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
@@ -177,16 +179,20 @@ class EnglishTextClassifier:
         ax.set_xlabel("Predicted Label")
         ax.set_ylabel("True Label")
         plt.tight_layout()
-        plt.savefig("en_5_confusion_matrix.png")
+        plt.savefig(f"{output_dir}/en_confusion_matrix.png", dpi=150)
         plt.show()
 
-    def save_model(self, path: str = "english_gnb_model.pkl") -> None:
+    def save_model(self, output_dir=".", filename: str = "english_model.pkl") -> None:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        path = output_dir + "/" +filename
         with open(path, "wb") as f:
             pickle.dump({"model": self.model, "vectorizer": self.tfidf}, f)
         print(f"English model saved → {path}")
 
     @staticmethod
-    def load_model(path: str = "english_gnb_model.pkl"):
+    def load_model(path: str = "english_model.pkl"):
         with open(path, "rb") as f:
             bundle = pickle.load(f)
         return bundle["model"], bundle["vectorizer"]
@@ -203,16 +209,16 @@ class EnglishTextClassifier:
         df = self.sample_dataset(df, n=SAMPLE_SIZE)
         df["clean_text"] = df["text"].apply(self.preprocess_text)
         print(df.columns)
-        # self.exploratory_data_analysis(self,df, output_dir=output_dir)
+        self.exploratory_data_analysis(df,output_dir=output_dir)
 
         X = self.text_embedding(df["clean_text"])
         y = df["label"].values
+        class_names = sorted(df["label"].unique().tolist())
 
         _, _, y_test, y_pred = self.training(X, y)
-        self.evaluate(y_test, y_pred)
-        self.save_model()
+        self.model_evaluation(y_test, y_pred, class_names=class_names, output_dir=output_dir)
+        self.save_model(output_dir=output_dir)
 
 if __name__ == "__main__":
     clf = EnglishTextClassifier()
     clf.run_full_pipeline()
-
