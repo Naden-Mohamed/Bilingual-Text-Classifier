@@ -19,7 +19,7 @@ def load_models():
     if not os.path.exists("arabic_outputs/arabic_model.pkl"):
         ar_clf.run_full_pipeline()
 
-    if not os.path.exists("english_outputs/english_gnb_model.pkl"):
+    if not os.path.exists("english_outputs/english_model.pkl"):
         en_clf.run_full_pipeline()
 
     lang_clf.model, lang_clf.tfidf = LanguageClassifier.load_model()
@@ -44,7 +44,7 @@ def classify(text: str) -> str:
     if language == "Arabic":
         prediction = ar_clf.predict([text])[0]
     else:
-        prediction = en_clf.predict([text])[0]
+        prediction = en_clf.predict([text])
 
     return f"Language : {language}\nCategory : {prediction}"
 

@@ -251,7 +251,7 @@ class ArabicTextClassifier:
         print(f"Arabic model saved → {path}")
 
     @staticmethod
-    def load_model(path: str = "models/arabic_model.pkl"):
+    def load_model(path: str = "arabic_outputs/arabic_model.pkl"):
         with open(path, "rb") as f:
             bundle = pickle.load(f)
         return bundle["model"], bundle["vectorizer"]

@@ -192,7 +192,7 @@ class EnglishTextClassifier:
         print(f"English model saved → {path}")
 
     @staticmethod
-    def load_model(path: str = "english_model.pkl"):
+    def load_model(path: str = "english_outputs/english_model.pkl"):
         with open(path, "rb") as f:
             bundle = pickle.load(f)
         return bundle["model"], bundle["vectorizer"]
@@ -202,7 +202,13 @@ class EnglishTextClassifier:
         vec = vectorizer or self.tfidf
         cleaned = [self.preprocess_text(t) for t in texts]
         X = vec.transform(cleaned).toarray()
-        return mdl.predict(X)
+        predict = mdl.predict(X)
+        if  predict == 1:
+            return "Negative"
+        elif predict == 2:
+            return"Positive"
+        else:
+            return "Neutral"
 
     def run_full_pipeline(self, output_dir: str = "english_outputs") -> None:
         df = self.get_english_data()
