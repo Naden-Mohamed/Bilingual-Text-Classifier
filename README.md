@@ -7,12 +7,12 @@ Try it: https://f42309da46a7503e25.gradio.live/
 
 ##  Key Highlights
 
-✨ Built a **dual-language NLP pipeline** (Arabic + English)
-✨ Designed **custom Arabic preprocessing** (normalization, diacritics removal, reshaping)
-✨ Implemented **TF-IDF + Logistic Regression** for efficient classification
-✨ Created **EDA visualizations & word clouds (Arabic-compatible)**
-✨ Developed an **interactive Gradio UI** for real-time predictions
-✨ Structured the project for **scalability & reuse**
+- Built a **dual-language NLP pipeline** (Arabic + English)
+- Designed **custom Arabic preprocessing** (normalization, diacritics removal, reshaping)
+- Implemented **TF-IDF + Logistic Regression** for efficient classification
+- Created **EDA visualizations & word clouds (Arabic-compatible)**
+- Developed an **interactive Gradio UI** for real-time predictions
+- Structured the project for **scalability & reuse**
 
 ---
 
@@ -48,7 +48,7 @@ User Input → Language Detection → Text Preprocessing → TF-IDF → Model Pr
 
 ---
 
-## 📊 Visual Insights
+##  Visual Insights
 
 The project includes rich exploratory analysis:
 
@@ -59,7 +59,7 @@ The project includes rich exploratory analysis:
 
 ---
 
-## 🖥️ Demo
+##  Demo
 
 ### Example Input:
 
@@ -76,7 +76,7 @@ Sentiment: Positive
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 * **Python**
 * **Scikit-learn**
